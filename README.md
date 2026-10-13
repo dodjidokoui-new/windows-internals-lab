@@ -14,7 +14,7 @@
 ## Progress
 
 | # | Lab | Status | Key Techniques/Tools |
-|---|-----|--------|----------------|-----------|
+|---|-----|--------|----------------|
 | 1.1 | Process Anatomy | In Progress | Process Hacker, handles, DACL |
 
 ## Environment 
