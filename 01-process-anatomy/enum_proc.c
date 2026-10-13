@@ -1,97 +1,86 @@
 /*
- * Lab 1.1 : Process Enumerator (Toolhelp32)
- * Goal: list PID, PPID, thread count, image name for every running process,
- *       resolve the owner username via the process token,
- *       and probe whether a handle with injection-level rights can be opened.
- *
- * Compile (Developer Command Prompt):
- *   cl /W4 /Zi enum_proc.c /link /out:enum_proc.exe
- */
+Lab 1.1 - Enumerateur de processus avec Toolhelp32
+Objectif : lister PID, PPID, nom, nombre de threads
+           et ouvrir un handle pour inspecter les droits
 
-#define WIN32_LEAN_AND_MEAN  
-#include <windows.h>
-#include <tlhelp32.h>         // CreateToolhelp32Snapshot, PROCESSENTRY32
-#include <stdio.h>
+Compile (ligne de commande) : cl /W4 /Zi enum_proc.c /link /out:enum_proc.exe
+Compile (Visual Studio)     : projet C, jeu de caractères -> "Non défini" OU
+                              laisser tel quel (le #undef ci-dessous gère tout)
+*/
 
 /*
- * PrintProcessUser — resolve the username that owns a given PID.
+ * FIX TCHAR / UNICODE
+ * Visual Studio définit UNICODE et _UNICODE par défaut dans ses projets,
+ * ce qui fait que PROCESSENTRY32 / Process32First deviennent des alias
+ * vers les variantes wchar_t (PROCESSENTRY32W). printf("%s") lit alors
+ * les wchar_t comme des char* et n'affiche qu'une seule lettre.
  *
- * Chain: PID -> Process handle -> Token handle -> TOKEN_USER -> SID -> name string
- *
- * Returns FALSE silently when access is denied (System, PPL-protected processes).
- * That is expected behaviour, not an error worth reporting to the caller.
+ * On force ici la version ANSI en undéfinissant UNICODE avant tout include
+ * Windows. Cela garantit que PROCESSENTRY32 == PROCESSENTRY32A (char[])
+ * quelle que soit la configuration du projet VS.
  */
+#undef  UNICODE
+#undef  _UNICODE
+
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <tlhelp32.h>   /* CreateToolhelp32Snapshot, PROCESSENTRY32 */
+#include <stdio.h>
+
+ /*
+  * Affiche le nom d'utilisateur associe a un PID.
+  * Ouvre le processus, recupere son token, interroge le SID.
+  * Retourne FALSE si acces refuse (processus SYSTEM sans SeDebugPrivilege).
+  */
 static BOOL PrintProcessUser(DWORD pid)
 {
-    /*
-     * Open the process with the minimum right needed to read its token.
-     * PROCESS_QUERY_INFORMATION is enough for OpenProcessToken — never ask
-     * for more rights than necessary (EDR visibility, DACL rejection).
-     */
+    /* Droit minimal pour lire le token : QUERY_INFORMATION seulement */
     HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (!hProc) {
-        // err=5  ACCESS_DENIED  -> DACL blocks us (System, lsass, PPL processes)
-        // err=87 INVALID_PARAM  -> PID does not exist (e.g. PID 0 Idle)
+        /* ACCESS_DENIED normal pour System, Idle, processus proteges */
         return FALSE;
     }
 
     HANDLE hToken = NULL;
-
-    /*
-     * OpenProcessToken: get a handle to the access token attached to this process.
-     * TOKEN_QUERY is the minimum right to call GetTokenInformation.
-     * Note: hProc and hToken are two separate kernel objects with separate DACLs.
-     */
+    /* TOKEN_QUERY : droit minimal pour lire les infos du token */
     if (!OpenProcessToken(hProc, TOKEN_QUERY, &hToken)) {
         CloseHandle(hProc);
         return FALSE;
     }
 
     /*
-     * GetTokenInformation — double-call pattern.
+     * GetTokenInformation pattern en deux passes :
+     *   1re passe : buffer NULL, taille 0 -> Windows ecrit la taille requise dans dwSize
+     *   2e  passe : buffer alloue de dwSize octets -> Windows remplit TOKEN_USER
      *
-     * The size of TOKEN_USER is not known at compile time because it embeds a SID,
-     * whose length varies per system. We cannot declare it as a stack variable.
-     *
-     * Step 1: call with NULL buffer and size 0 to ask Windows how many bytes we need.
-     *         The call fails on purpose — we only care about the value written to dwSize.
-     * Step 2: allocate exactly that many bytes on the heap.
-     * Step 3: call again with the real buffer.
-     *
-     * This "size-probe then allocate" pattern appears in dozens of Win32 APIs.
+     * BUG CORRIGE : la version initiale passait "9" au lieu de "0" au 4e argument,
+     * ce qui causait un calcul de taille incorrect et une heap corruption silencieuse.
      */
     DWORD dwSize = 0;
-    GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize); // step 1 — get size
+    GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
 
-    TOKEN_USER* pTokenUser = (TOKEN_USER*)HeapAlloc(GetProcessHeap(), 0, dwSize); // step 2
+    TOKEN_USER* pTokenUser = (TOKEN_USER*)HeapAlloc(GetProcessHeap(), 0, dwSize);
     if (!pTokenUser) {
         CloseHandle(hToken);
         CloseHandle(hProc);
         return FALSE;
     }
 
-    if (GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) { // step 3
-        /*
-         * LookupAccountSid: translate the SID (binary identifier, e.g. S-1-5-21-...-1001)
-         * into a human-readable name ("DOMAIN\Username").
-         * Windows stores identities as SIDs internally — names can change, SIDs never do.
-         */
-        char szName[256]   = {0}; // "sz" prefix = zero-terminated string (Hungarian notation)
-        char szDomain[256] = {0};
-        DWORD nameLen   = sizeof(szName);
+    if (GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) {
+        /* LookupAccountSidA : convertit le SID en nom lisible DOMAIN\User */
+        char szName[256] = { 0 };
+        char szDomain[256] = { 0 };
+        DWORD nameLen = sizeof(szName);
         DWORD domainLen = sizeof(szDomain);
         SID_NAME_USE sidType;
 
-        if (LookupAccountSidA(NULL,                    // local machine
-                              pTokenUser->User.Sid,    // SID inside the TOKEN_USER struct
-                              szName,   &nameLen,
-                              szDomain, &domainLen,
-                              &sidType)) {
-            printf("  User : %s\\%s\n", szDomain, szName);
+        if (LookupAccountSidA(NULL, pTokenUser->User.Sid,
+            szName, &nameLen,
+            szDomain, &domainLen, &sidType)) {
+            printf("  User: %s\\%s\n", szDomain, szName);
         }
     }
 
-    // Always free heap memory — missing HeapFree = kernel handle/memory leak
     HeapFree(GetProcessHeap(), 0, pTokenUser);
     CloseHandle(hToken);
     CloseHandle(hProc);
@@ -99,92 +88,89 @@ static BOOL PrintProcessUser(DWORD pid)
 }
 
 /*
- * ProbeHandleRights — attempt to open a handle with the exact rights
- * required for classic remote DLL injection (Lab 2.2).
+ * Tente d'ouvrir un handle avec les droits minimaux necessaires
+ * a l'injection classique (Lab 2.2) et affiche le resultat.
  *
- * Why these five rights and not PROCESS_ALL_ACCESS?
- *   - Each right maps to exactly one injection API call (see comments below).
- *   - PROCESS_ALL_ACCESS is an immediate IOC: no legitimate software needs
- *     every right simultaneously. EDRs flag it. We don't.
+ * Objectif pedagogique : comprendre les DACL en pratique.
+ * Un processus protege (PPL, SYSTEM) bloquera ici avec ERROR_ACCESS_DENIED (5).
  */
 static void ProbeHandleRights(DWORD pid)
 {
     DWORD injectionRights =
-        PROCESS_CREATE_THREAD     |  // CreateRemoteThread  — starts our payload
-        PROCESS_QUERY_INFORMATION |  // read process metadata, open token
-        PROCESS_VM_OPERATION      |  // VirtualAllocEx      — allocate space in target
-        PROCESS_VM_WRITE          |  // WriteProcessMemory  — copy payload into target
-        PROCESS_VM_READ;             // ReadProcessMemory   — verify the write
+        PROCESS_CREATE_THREAD | /* CreateRemoteThread              */
+        PROCESS_QUERY_INFORMATION | /* Lire infos process              */
+        PROCESS_VM_OPERATION | /* VirtualAllocEx                  */
+        PROCESS_VM_WRITE | /* WriteProcessMemory              */
+        PROCESS_VM_READ;            /* ReadProcessMemory               */
 
     HANDLE h = OpenProcess(injectionRights, FALSE, pid);
     if (h) {
         printf("  [+] Handle injection possible (CREATE_THREAD|VM_*)\n");
         CloseHandle(h);
-    } else {
+    }
+    else {
         DWORD err = GetLastError();
-        printf("  [-] Handle injection denied  (err=%lu)\n", err);
-        // err=5  -> DACL blocks us (System, lsass, PPL-protected processes)
-        // err=87 -> invalid PID (Idle, PID 0)
+        printf("  [-] Handle injection refuse (err=%lu)\n", err);
+        /* 5  = ERROR_ACCESS_DENIED     -> DACL bloque                 */
+        /* 87 = ERROR_INVALID_PARAMETER -> PID invalide / process mort */
     }
 }
 
 int main(void)
 {
     /*
-     * CreateToolhelp32Snapshot: ask the kernel for a frozen copy of the process list.
+     * CP_UTF8 : aligne la console Windows 11 sur l'encodage UTF-8.
+     * Sans ca, les caracteres accentues dans les noms de comptes
+     * (ex. "Systeme") s'affichent en mojibake.
+     * Note : les noms de processus (szExeFile) sont ASCII pur -> pas affectes.
+     */
+    SetConsoleOutputCP(CP_UTF8);
+
+    /*
+     * CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
      *
-     * Why a snapshot and not a live query?
-     * The process list changes continuously. Without a snapshot we could read a
-     * partially updated entry or miss a process that exited between two calls
-     * (race condition). The snapshot freezes state at one instant.
+     * Cree un snapshot de la table des processus du noyau.
+     * Le second parametre (0) est ignore pour TH32CS_SNAPPROCESS.
      *
-     * The second parameter (0) is ignored for TH32CS_SNAPPROCESS.
-     * The returned handle points to a temporary kernel object — close it when done.
+     * Pourquoi un snapshot ?
+     * La liste des processus change en permanence. Le snapshot fige
+     * l'etat a un instant T, eliminant les race conditions (un process
+     * qui meurt entre deux appels ne corromprait pas l'iteration).
      */
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) {
-        fprintf(stderr, "Snapshot failed: %lu\n", GetLastError());
+        fprintf(stderr, "Snapshot echoue: %lu\n", GetLastError());
         return 1;
     }
 
     /*
-     * PROCESSENTRY32: the struct Windows fills for each process in the snapshot.
+     * PROCESSENTRY32 : structure decrivant un processus dans le snapshot.
+     * Grace au #undef UNICODE en tete de fichier, cette macro resout vers
+     * PROCESSENTRY32A, dont le champ szExeFile est char[] -> compatible %s.
      *
-     * CRITICAL: dwSize MUST be set to sizeof(PROCESSENTRY32) before Process32First.
-     * Windows reads this field first to know how many bytes it may write safely.
-     * This guards against struct layout changes across SDK versions.
-     * Forgetting dwSize -> immediate ERROR_INSUFFICIENT_BUFFER / crash.
-     *
-     * This "set dwSize before use" pattern is universal across Win32 structs.
+     * CHAMP CLE : dwSize DOIT etre initialise avant Process32First.
+     * Pattern Windows de compatibilite ascendante : si la struct grandit
+     * dans une future version du SDK, la taille permet de l'adapter.
+     * Oublier dwSize -> ERROR_INSUFFICIENT_BUFFER immediat.
      */
     PROCESSENTRY32 pe32;
     pe32.dwSize = sizeof(PROCESSENTRY32);
 
-    /*
-     * Process32First: seed the iteration — fills pe32 with the first process entry.
-     */
     if (!Process32First(hSnap, &pe32)) {
-        fprintf(stderr, "Process32First failed: %lu\n", GetLastError());
+        fprintf(stderr, "Process32First echoue: %lu\n", GetLastError());
         CloseHandle(hSnap);
         return 1;
     }
 
-    // Column headers — %-Ns = left-aligned string padded to N characters
-    printf("%-8s %-8s %-6s %-40s\n", "PID", "PPID", "Thds", "Name");
-    printf("%-8s %-8s %-6s %-40s\n", "---", "----", "----", "----");
+    printf("%-8s %-8s %-6s %-40s\n", "PID", "PPID", "Thds", "Nom");
+    printf("%-8s %-8s %-6s %-40s\n", "---", "----", "----", "---");
 
-    /*
-     * do...while and not while: Process32First already loaded the first entry into pe32.
-     * A regular while loop would call Process32Next before printing it, skipping entry 0.
-     * Process32Next overwrites pe32 on each call — one struct serves the whole iteration.
-     * Returns FALSE when there are no more entries.
-     */
     do {
         printf("%-8lu %-8lu %-6lu %-40s\n",
-               pe32.th32ProcessID,        // PID
-               pe32.th32ParentProcessID,  // PPID — who spawned this process
-               pe32.cntThreads,           // active thread count
-               pe32.szExeFile);           // image name (no full path)
+            pe32.th32ProcessID,       /* PID                          */
+            pe32.th32ParentProcessID, /* PPID - qui a spawne ce proc  */
+            pe32.cntThreads,          /* nb de threads actifs         */
+            pe32.szExeFile);          /* char[] garanti -> %s correct */
 
         ProbeHandleRights(pe32.th32ProcessID);
         PrintProcessUser(pe32.th32ProcessID);
@@ -192,7 +178,6 @@ int main(void)
 
     } while (Process32Next(hSnap, &pe32));
 
-    // Release the snapshot kernel object — never skip CloseHandle
     CloseHandle(hSnap);
     return 0;
 }

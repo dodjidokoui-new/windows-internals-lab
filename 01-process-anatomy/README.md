@@ -27,8 +27,11 @@ Before injecting code into a process, i need to understand what a process actual
 **Admin ≠ all-powerful.**  
 Even running as Administrator, several system processes return `err=5` (ACCESS_DENIED). PPL-protected processes and kernel processes (`System`, PID 4) resist `OpenProcess` regardless of admin rights. `SeDebugPrivilege` is the level above that.
 
-[Screenshots non admin]
-[Screenshots admin]
+
+![Execution without admin privileges](screenshots/Exe_No_Admin.png)
+![Execution without admin privileges](screenshots/Exe_No_Admin_2.png)
+
+[Execution with admin privileges](screenshots/Exe_Admin.png)
 
 **`PROCESS_ALL_ACCESS` is an IOC.**  
 The tool deliberately requests only the five rights needed for injection, not `PROCESS_ALL_ACCESS`. Every unnecessary right is noise for an EDR. I will do the test in some lab later to actually see how edr detection i sworking.
