@@ -33,8 +33,9 @@ Even running as Administrator, several system processes return `err=5` (ACCESS_D
 **`PROCESS_ALL_ACCESS` is an IOC.**  
 The tool deliberately requests only the five rights needed for injection, not `PROCESS_ALL_ACCESS`. Every unnecessary right is noise for an EDR. I will do the test in some lab later to actually see how edr detection i sworking.
 
-**Toolhelp32 for process discovery.**  
+**Toolhelp32 for process discovery.** 
 As mentionned in the MITRE ATT&CK T1057, we know that adversaries use some Native API output like the CreateToolhelp32Snapshot to extract information about processes. The snapshot freezes the system state at a single point in time, without it, processes starting or exiting during enumeration could cause inconsistent reads,a classic race condition.
+
 ---
 
 ## References
