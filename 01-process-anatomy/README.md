@@ -20,18 +20,19 @@ Before injecting code into a process, i need to understand what a process actual
 
 ---
 
-[Screenshots of program starting]
-
 ## Key observations
 
 **Admin ≠ all-powerful.**  
 Even running as Administrator, several system processes return `err=5` (ACCESS_DENIED). PPL-protected processes and kernel processes (`System`, PID 4) resist `OpenProcess` regardless of admin rights. `SeDebugPrivilege` is the level above that.
 
-*Execution without admin terminal*
+**Execution _without admin_ terminal**
+--------------------------------------
 ![Execution without admin privileges](screenshots/Exe_No_Admin.png)
 ![Execution without admin privileges](screenshots/Exe_No_Admin_2.png)
 
-*Execution with admin terminal*
+
+**Execution _with admin_ terminal**
+-----------------------------------
 ![Execution with admin privileges](screenshots/Exe_Admin.png)
 
 **`PROCESS_ALL_ACCESS` is an IOC.**  
