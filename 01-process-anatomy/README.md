@@ -44,7 +44,7 @@ As mentionned in the MITRE ATT&CK T1057, we know that adversaries use some Nativ
 
 ## References
 
-- *Windows Internals, 7th Ed.* — Chapter 5
+- *Windows Internals, 7th Ed.*
 - [MSDN — PROCESSENTRY32](https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/ns-tlhelp32-processentry32)
 - [MSDN — OpenProcess access rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights)
 - [MITRE ATT&CK T1057](https://attack.mitre.org/techniques/T1057/)

@@ -3,22 +3,8 @@ Lab 1.1 - Enumerateur de processus avec Toolhelp32
 Objectif : lister PID, PPID, nom, nombre de threads
            et ouvrir un handle pour inspecter les droits
 
-Compile (ligne de commande) : cl /W4 /Zi enum_proc.c /link /out:enum_proc.exe
-Compile (Visual Studio)     : projet C, jeu de caractères -> "Non défini" OU
-                              laisser tel quel (le #undef ci-dessous gère tout)
 */
 
-/*
- * FIX TCHAR / UNICODE
- * Visual Studio définit UNICODE et _UNICODE par défaut dans ses projets,
- * ce qui fait que PROCESSENTRY32 / Process32First deviennent des alias
- * vers les variantes wchar_t (PROCESSENTRY32W). printf("%s") lit alors
- * les wchar_t comme des char* et n'affiche qu'une seule lettre.
- *
- * On force ici la version ANSI en undéfinissant UNICODE avant tout include
- * Windows. Cela garantit que PROCESSENTRY32 == PROCESSENTRY32A (char[])
- * quelle que soit la configuration du projet VS.
- */
 #undef  UNICODE
 #undef  _UNICODE
 
@@ -52,9 +38,6 @@ static BOOL PrintProcessUser(DWORD pid)
      * GetTokenInformation pattern en deux passes :
      *   1re passe : buffer NULL, taille 0 -> Windows ecrit la taille requise dans dwSize
      *   2e  passe : buffer alloue de dwSize octets -> Windows remplit TOKEN_USER
-     *
-     * BUG CORRIGE : la version initiale passait "9" au lieu de "0" au 4e argument,
-     * ce qui causait un calcul de taille incorrect et une heap corruption silencieuse.
      */
     DWORD dwSize = 0;
     GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
@@ -97,9 +80,9 @@ static BOOL PrintProcessUser(DWORD pid)
 static void ProbeHandleRights(DWORD pid)
 {
     DWORD injectionRights =
-        PROCESS_CREATE_THREAD | /* CreateRemoteThread              */
+        PROCESS_CREATE_THREAD | /* Create a thread in a process              */
         PROCESS_QUERY_INFORMATION | /* Lire infos process              */
-        PROCESS_VM_OPERATION | /* VirtualAllocEx                  */
+        PROCESS_VM_OPERATION | /* VirtualProtectEx & WriteProcessMemory                  */
         PROCESS_VM_WRITE | /* WriteProcessMemory              */
         PROCESS_VM_READ;            /* ReadProcessMemory               */
 
@@ -118,12 +101,6 @@ static void ProbeHandleRights(DWORD pid)
 
 int main(void)
 {
-    /*
-     * CP_UTF8 : aligne la console Windows 11 sur l'encodage UTF-8.
-     * Sans ca, les caracteres accentues dans les noms de comptes
-     * (ex. "Systeme") s'affichent en mojibake.
-     * Note : les noms de processus (szExeFile) sont ASCII pur -> pas affectes.
-     */
     SetConsoleOutputCP(CP_UTF8);
 
     /*
@@ -151,7 +128,6 @@ int main(void)
      * CHAMP CLE : dwSize DOIT etre initialise avant Process32First.
      * Pattern Windows de compatibilite ascendante : si la struct grandit
      * dans une future version du SDK, la taille permet de l'adapter.
-     * Oublier dwSize -> ERROR_INSUFFICIENT_BUFFER immediat.
      */
     PROCESSENTRY32 pe32;
     pe32.dwSize = sizeof(PROCESSENTRY32);
@@ -168,7 +144,7 @@ int main(void)
     do {
         printf("%-8lu %-8lu %-6lu %-40s\n",
             pe32.th32ProcessID,       /* PID                          */
-            pe32.th32ParentProcessID, /* PPID - qui a spawne ce proc  */
+            pe32.th32ParentProcessID, /* PPID  */
             pe32.cntThreads,          /* nb de threads actifs         */
             pe32.szExeFile);          /* char[] garanti -> %s correct */
 
