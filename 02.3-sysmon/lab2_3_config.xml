@@ -1,0 +1,19 @@
+<Sysmon schemaversion="4.91">
+	<EventFiltering>
+
+		<!-- Event 7 : chargement denotre DLL dans le processus ciblé -->
+		<ImageLoad onmatch="include">
+			<Rule name="DLL_Suspecte" groupRelation="or">
+				<ImageLoaded condition="contains">labdll</ImageLoaded>
+			</Rule>
+		</ImageLoad>
+		
+		<!-- Event 8 : thread créé à distance avec LoadLibrary comme point d'entrée -->
+		<CreateRemoteThread onmatch="include">
+			<Rule name="Injection_Classique_LoadLibrary" groupRelation="or">
+				<StartFunction condition="begin with">LoadLibrary</StartFunction>
+			</Rule>
+		</CreateRemoteThread>
+		
+	</EventFiltering>
+</Sysmon>
