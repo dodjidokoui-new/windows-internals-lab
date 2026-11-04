@@ -17,10 +17,10 @@ Let's start by explaining how the code works.
 
 First we define de PrintLastError() function which simply serves to display errors messages with more context to have a better understanding and help us to debug.
 
-Then we have the GetProcessIdByName() function. Here we are using the principle we saw in previous labs : we create a snapshot of processes currently running via ToolHelp32, we decalre a PROCESSENTRY variable ( a structure that contains the fields that describes a process, fields lik PID, name, PPID, Size etc...), then we will, then we will compare the name of the targeted process with each iteration of processes in the snapshot in order to find the PID of the targeted process.
+Then we have the GetProcessIdByName() function. Here, we are using the principle we saw in previous labs : we create a snapshot of processes currently running via ToolHelp32, we decalre a PROCESSENTRY variable ( a structure that contains the fields that describes a process, fields like PID, name, PPID, Size etc...), then we will compare the name of the targeted process with each iteration of processes in the snapshot in order to find the PID of the targeted process.
 
-In the main() function, we first start by getting the arguments that we will pass through when launching the program (injector.exe exemple.exe C:\DLL_ABSOLUTE_PATH) then we use the GetProcessIdByName in order to find the PID of the process. Then, we declare the "desiredAccess" variable that combine all the necessary ACCESS with as fex permissions as possible (it's a good practice to avoid edr detection, a "PROCESS_ALL_ACCESS" is a red flag).
-Afterwards, we open the process using the permissions that we've configured, allocated memiry in this process and writing the DLL path in the memory of the target. Subsequently, we're going to pick up LoadLibraryA address (by loading kernel32.dll, windows ensures that processes started afterward in the same session map it to the same virtual address ; the Windows Memory Manager handles this through image section sharing, so LoadLibraryA is located at the same virtual address across these processes),that we will use in "hthread" in order to create the remote thread. Once the DLL is loaded in the targer process, the message box appears and VOILA, injection done. I did a test with notepad.exe, here are some of my screenshots for you to illustrate : 
+In the main() function, we first start by getting the arguments that we will pass through when launching the program (e.g. `injector.exe exemple.exe C:\DLL_ABSOLUTE_PATH`) then we use the GetProcessIdByName in order to find the PID of the process. After that, we declare the "desiredAccess" variable that combine all the necessary ACCESS with as few permissions as possible (it's a good practice to avoid edr detection, a "PROCESS_ALL_ACCESS" is a red flag).
+Afterwards, we open the process using the permissions that we've configured, allocated memory in this process and writing the DLL path in the memory of the target. Subsequently, we're going to pick up LoadLibraryA address (*by loading kernel32.dll, windows ensures that processes running in the same session map kernel32.dll to the same virtual address ; the Windows Memory Manager handles this through image section sharing, so LoadLibraryA is located at the same virtual address across these processes*),that we will use in "hthread" in order to create the remote thread. Once the DLL is loaded in the targer process, the message box appears and VOILA, injection done. I did a test with notepad.exe, here are some of my screenshots for you to illustrate : 
 
 ![Notepad PID](screenshots/notepad_pid.png)
 
@@ -71,6 +71,7 @@ typedef NTSTATUS(NTAPI* pfnNtCreateThreadEx)
 	);
 
 ```
+During my research, I also found the `RtlCreateUserThread` function signature  (another undocumented Native API alternative), but I chose to use `NtCreateThreadEx`  for this lab. Both achieve the same result at a similar layer.
 
 Then we initiate the "NtCreateThreadEx" variable that we will use like that : 
 ```C
