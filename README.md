@@ -2,7 +2,7 @@
 
 > Hands-on journey into Windows internals: building real red team and blue team skills through deep understanding.
 > Each lab = commented code + visuals + offensive **and** defensive perspective.
-> Isolated VM on Proxmox — no binary executed outside this controlled environment.
+> Isolated VM on Proxmox, no binary executed outside this controlled environment.
 
 ---
 
@@ -70,7 +70,7 @@
 ```
 XX-lab-name/
 ├── README.md        ← theory, mechanisms, "why it works"
-├── src/             ← commented source code (hand-typed, not copy-pasted)
+├── src/             ← commented source code 
 ├── screenshots/     ← execution proof, Sysmon events, debugger views
 └── detection/       ← Sysmon config, Sigma rules, SOC perspective
 ```
@@ -79,6 +79,6 @@ XX-lab-name/
 
 ## Legal
 
-All manipulations are performed exclusively inside an isolated VM, on self-written binaries.  
-**Absolute rule: if the binary is not mine, I do not inject.**  
-This repository is for **educational purposes only.**  
+All manipulations are performed exclusively inside an isolated VM.
+Injections target third-party processes **solely within this controlled lab environment**,
+for educational purposes only.
