@@ -42,6 +42,7 @@ Some sources more detailed :
 
 ## Architecture
 
+```
 Shellcode.asm (NASM x64, 5 blocs)
 │
 ▼
@@ -55,7 +56,7 @@ cl loader.c /W4 -> loader.exe
 │
 ▼
 VirtualAlloc (RWX) -> memcpy -> CreateThread -> shellcode is executed
-
+```
 
 
 
@@ -76,9 +77,9 @@ cl loader.c /W4
 
 The complete source code with comments is available in this repo.
 The key files :
-    - `shellcode.asm` - the shellcode (5 blocs : prologue, PEB Walk, main body, find_export, data)
-    - `convert.ps1` - generate sc_bytes.h from shellcode.bin
-    - `loader.c` - allocates a RWX region, copies and executes the shellcode
+- `shellcode.asm` - the shellcode (5 blocs : prologue, PEB Walk, main body, find_export, data)
+- `convert.ps1` - generate sc_bytes.h from shellcode.bin
+- `loader.c` - allocates a RWX region, copies and executes the shellcode
 
 
 
