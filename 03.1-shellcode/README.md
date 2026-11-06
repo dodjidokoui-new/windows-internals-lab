@@ -93,25 +93,33 @@ The key files :
 
 ## Detection - Defensive POV
 
-### Static IOC     : clear strings
+### Static IOC     : clear strings + no PE header
 ![Shellcode Content](screenshots/ShellcodeBinContent.png)
 
-Strings `GetProcAddress`, `LoadLibraryA`, `MessageBoxA`, `Shellcode actif !` are visible in plaintext. An AV that scans memory detects them immediately, we will see that concept again in another lab.
+**Strings in plaintext**
+Strings `GetProcAddress`, `LoadLibraryA`, `MessageBoxA`, `Shellcode actif !`, `user32.dll` are visible in plaintext. An AV that scans memory detects them immediately, we will see that concept again in another lab.
+
+**No MZ signature
+Unlike legitimate executables (EXE, DLL, SYS), shellcode is not a PE file  and carries no MZ signature. Static AV scanners looking for known file  format signatures find nothing. However, the absence of any recognizable  structure is itself an anomaly: modern EDRs flag executable memory regions  that contain no PE header as suspicious, the absence of MZ (0x4D 0x5A) is as telling  as its presence in the wrong place.
+
+
+Some good sources:
+- https://0xrick.github.io/win-internals/pe3
+- https://www.netspi.com/blog/technical-blog/web-application-pentesting/magic-bytes-identifying-common-file-formats-at-a-glance/
+
 
 ### Dynamic IOC    : RWX region without module
 ![RWX Region](screenshots/ProcessHacker_RWX.png)
 
 `Private: Commit RWX` region at address `0x1DCF8B20000` is visible in Process Hacker. I see three simultaneous anomalies:
-    - Among the Private: Commit regions, only one stands out: RWX protection with an empty Use column. Thread stacks are also private but carry RW+G protection and are labeled accordingly.
-    - `RWX` permissions is a strong IOC - legitimate DLLs usually have either `RX` or `RW` permissions, 
-    - `Use` columns is empty, that means that there is no associated modules
+- Among the Private: Commit regions, only one stands out: RWX protection with an empty Use column. Thread stacks are also private but carry RW+G protection and are labeled accordingly.
+- `RWX` permissions is a strong IOC - legitimate DLLs usually have either `RX` or `RW` permissions, 
+- `Use` columns is empty, that means that there is no associated modules
 
 ### Behavioral IOC : user32.dll loaded without IAT
 ![user32.dll without IAT](screenshots/user32dll%20charged.png)
 
 `user32.dll` appears in modules of `loader.exe` even though `loader.c` never imports it explicitly. No `#include`, no `lib` link to it, THAT WEIRD, this is a strong behavioral IOC. The shellcode loaded it itself via `LoadLibraryA` resolved dynamically, it is visible and abnormal for an EDR, which is a strong IOC.
-
-
 
 
 
